@@ -1,7 +1,20 @@
 using System.Collections;
 using System.Collections.Generic;
+//using System.Numerics;
 using Unity.Mathematics;
 using UnityEngine;
+
+
+/// <summary>
+/// 마우스 이동방향을 계산하는 열거형
+/// </summary>
+public enum MouseMoveDirection
+{
+     MOUSEMOVERIGHT,
+     MOUSEMOVELEFT,
+     MOUSEMOVEUP,
+     MOUSEMOVEDOWN
+};
 
 public class BoardManager : MonoBehaviour
 {
@@ -47,6 +60,12 @@ public class BoardManager : MonoBehaviour
     /// </summary>
     /// <param name="column"></param>
     /// <param name="row"></param>
+    /// 
+
+    //Updata 문에서 블럭에 포함된 점의 좌표를 찍기 위해 만드는 멤버필드 ( 컬럼과 로우만큼 for문을 돌릴 때 사용)
+    private int _Column = 0;
+    private int _Row = 0;
+
     void MakeBoard(int column, int row)
     {
         float width = _ScreenWidth -(_Xmargin * 2); //출력되는 너비 ( 5.6이됨. 스크린 x 는 2.8이고 전체 스크린 너비를 구한 것)
@@ -61,6 +80,10 @@ public class BoardManager : MonoBehaviour
 
         //행과 열 값으로 게임 보드를 만든다 ( 배열의 크기를 정해줌)
         _GameBoard = new GameObject[column, row];
+
+        //받은 col과row를  사용하여 블럭의 좌표를 알아낸다
+        _Column = column;
+        _Row = row;
 
         for (int co = 0; co < column; co++)
         {
@@ -105,6 +128,9 @@ public class BoardManager : MonoBehaviour
 
                 //_GameBoard[co, ro].GetComponent<Block>().Move(DIRECTION.LEFT);
 
+                //블럭에 이름을 전달 (어느게 찍혔는지 확인)
+                _GameBoard[co, ro].name = $"Block[{co},{ro}]";
+                
                 
             }
         }
@@ -142,8 +168,185 @@ public class BoardManager : MonoBehaviour
         }
     }
     #endregion
+
+    //블럭을 끌어당길 때의 각 구하기
+    //마우스를 클릭했을 때 시작 위치를 정하는 start 떼었을 때 종료 위치를 정하는 end
+    private Vector3 _StartPos = Vector3.zero;   //마우스 클릭 시 시작좌표
+    private Vector3 _EndPos = Vector3.zero; //마우스 클릭 후의 좌표
+    bool _IsOver = false;   //클릭된 블럭이 있는지 저장
+    //클릭된 오브젝트 저장
+    GameObject _ClickObject;    //클릭된 블럭 참조값 저장
+    bool _MouseClick = false;   //마우스가 클릭상태인지 아닌지 체크
+    float _MoveDistance = 0.01f; //민감도 조절(시작점에서 끝점 거리의 판단 기준값)
+
+    /// <summary>
+    /// 클릭된 상태에서 마우스 이동 시 호출
+    /// </summary>
+    void MouseMove()
+    {
+        Debug.Log("MouseMove");
+        //감도체크
+        //두 벡터사이의 거리를 구한다
+        float diff = Vector2.Distance(_StartPos, _EndPos);
+        //조건 
+        //움직인 거리가 내가 설정한 MoveDistance 보다 클 때 처리, MoveDistance : 감도 0.01f
+        // 클릭된 오브젝트가 있을 때
+        if(diff > _MoveDistance && _ClickObject != null) 
+        {
+            //어느쪽 방향으로 움직임이 일어났는지 계산
+            // 마우스 방향 enum, 마우스 이동 시 방향을 계산하는 함수, 방향 계산 뒤에 그 사이의 각도를 구하는 함수
+            MouseMoveDirection dir = CalculateDirection();
+            Debug.Log("Direction "+dir);
+        }
+    }
+    /// <summary>
+    /// 마우스 이동 시 이동한 방향을 계산하는 함수
+    /// </summary>
+    /// <param name="mouseMove"></param>
+    /// <returns></returns>
+    private MouseMoveDirection CalculateDirection ()
+    {
+        float angle = CalculateAngle(_StartPos, _EndPos);   //z축을 기준으로 회전하는 각도값을 구한다
+        /*
+         up벡터를 0으로 뒀을 떄, 시계방향으로 0 45 90 135 180 225 270 315 360 
+         */
+        if (angle > 315.0f && angle <= 360 || angle >= 0 && angle < 45.0f)
+        {
+            return MouseMoveDirection.MOUSEMOVEUP;
+        }
+        else if(angle >= 45f && angle<135f)
+        {
+            //화면 반대편에서 보기 때문에 left로 바뀐다
+            return MouseMoveDirection.MOUSEMOVELEFT;
+        }
+        else if(angle >= 135f && angle <225f)
+        {
+            return MouseMoveDirection.MOUSEMOVEDOWN;
+        }
+        else if(angle>=225f && angle<315f)
+        {
+            //화면 반대편에서 보기 때문에 left로 바뀐다
+            return MouseMoveDirection.MOUSEMOVERIGHT;
+        }
+        else
+        {
+            //어차피 위에서 걸릴거라 else 의미는 없음 ( 그냥 right 를 else 해서 리턴해도 됨
+            return MouseMoveDirection.MOUSEMOVEDOWN;
+        }
+    }
+    /// <summary>
+    /// 두 벡터 사이의 각도를 구하는 함수
+    /// </summary>
+    /// <param name="from"></param>
+    /// <param name="to"></param>
+    /// <returns></returns>
+    private float CalculateAngle(Vector3 from, Vector3 to)
+    {
+        //블럭의 네 부분 각도를 구해 그 바운더리에 들어온 위치를 통해 방향을 정한다
+        //to 에서 from 좌표값을 뺴면 from 에서 to로 향하는 좌표값을 만들 수 있다
+        //up벡터와 to 벡터 사이의 각도를 구하는 함수가 FromToRotation이다.
+        //우리가 쳐다보는 좌표가 z 이기 때문에, 회전 각도 중에서도 z 값만 취한다 => 
+        return Quaternion.FromToRotation(Vector3.up, to - from).eulerAngles.z;
+    }
+
     void Update()
     {
-        
+        /*
+         게임 : 게임 메인루프가 돌아가고 -> 입력 확인을 하고 -> 입력에 따른 프로세싱 처리하고 -> 화면에 랜더링 한다
+         */
+
+        //마우스 버튼이 눌렸을 때 
+        if(Input.GetMouseButtonDown(0))
+        {
+            //마우스 클릭한 상태로 변경
+            _MouseClick = true;
+
+            //Bounds 오류나는 경우 이걸로 쓰기 
+            Vector3 pos = Input.mousePosition;
+            //pos = Camera.main.ScreenToWorldPoint(new Vector3(pos.x, pos.y, 10f));
+
+            //StartPos와 EndPos 를 마우스가 처음 클릭한 좌표로 저장
+             _EndPos =_StartPos = Camera.main.ScreenToWorldPoint(new Vector3(pos.x, pos.y, 10f));   //클릭이 되었을 때 위치를 시작점과 끝점 위치값으로 초기화
+            //z값을 쓰지 않으니 0으로 초기화
+            _EndPos.z = _StartPos.x = 0f;
+
+
+            //2D에서는 마우스로 하는게 더 편함 (3D는 광선을 발사해서 사용-> 무거움)
+
+            //마우스 버튼이 눌렸을 때, 눌린 위치값을 가져온다
+            //Vector3 pos = Camera.main.ScreenToWorldPoint(Input.mousePosition);
+            //Debug.Log("Mouse Pos " + pos);
+
+            //스크린상에서 찍은 포지션 값이 출력된다.
+            //그러나 그 좌표에 어떤 블럭이 있는지 확인해야함 
+            //블럭의 사각영역 안에 우리가 찍은 점이 포함되어있는지 블럭의 갯수만큼 돌려야 한다
+            //게임보드에 블럭을 넣어놨기 때문에 거기 있는 블럭만큼 돌리면 되기 때문에 col과 row 값을 기록하는 멤버필드를 만든다
+
+            //클릭이 되었는지 안 되었는지 체크하는 변수
+
+
+             _IsOver = false;
+            for (int i = 0; i < _Column; i++)
+            {
+                for (int j   = 0; j < _Row; j++)
+                {
+                    //클릭한 좌표값과 겹쳐지는 블럭을 찾는 것
+                    //먼저 블럭이 있는지를 체크한다 (없는 경우도 있음)
+
+
+                    if (_GameBoard[i,j]!= null)
+                    {
+                        //클릭이 되었는지 안 되었는지 체크하는 변수
+                        //각각의 블럭들은 블럭 컴포넌트의 부모컴포넌트에 있는 블럭에 접근하고 그건 또 자식들의 spriterenderer에 접근해서
+                        //사각형의 bounds 를 가져온다. bound안에 a마우스 클릭한 월드 좌표의 위치가 포함되는지 여부를 bool값으로 전달한다
+
+                        _IsOver = _GameBoard[i,j].GetComponent<Block>().BlockImage.GetComponent<SpriteRenderer>().bounds.Contains(pos);
+                        //isOver = true;
+
+                        //만약에 오브젝트의 사이즈로 하려면 콜라이더를 넣어준다.
+
+
+                    }
+
+                    if(_IsOver==true)
+                    {
+                        //찍힌 블럭의 이름이 출력된다.
+                        Debug.Log("ClickObj = "+_GameBoard[i,j].name);
+
+                        //클릭한 오브젝트의 참조값을 클릭오브젝트 멤버필드에 할당
+                        _ClickObject = _GameBoard[i, j];
+
+                        //중첩되어있는 for문을 한번에 빠져나가기 (그렇지 않으면 break 를 두 번 써줘야 함)
+                        goto LoopExit;
+                    }
+
+                }
+            }
+        LoopExit:;
+
+        }
+        //마우스 버튼을 놨을 때
+        if(Input.GetMouseButtonUp(0))
+        {
+            _ClickObject= null;
+            _MouseClick= false;
+
+        }
+        //마우스가 클릭된 상태에서 마우스가 어떤 방향이든 변화가 있는지
+        //1. 마우스 클릭을 TRUE 로 처리 (클릭된 상태에서 드래그를 했는지 안했는지 처리)
+        //2. X축으로 이동했는지 (변화량이 있는지 => 어느쪽이든 상관 없음. 0이면 변화량이 없음)
+        if(_MouseClick == true&&(Input.GetAxis("Mouse X")<0) || (Input.GetAxis("Mouse X")>0)
+            || (Input.GetAxis("Mouse Y"))<0 || (Input.GetAxis("Mouse Y") > 0))
+        {
+            //변화가 있는 마우스 커서의 위치를 가져와서 을 ENDPOS에 저장
+            //클릭된 상태에서 마우스가 움직인 것. 그 움직인 위치값을 endPos가 된다
+            //클릭점은 startPos가 되고 내가조금이라도 움직이면 그걸 endpos로 정한다
+            Vector3 pos = Input.mousePosition;
+            _EndPos = Camera.main.ScreenToWorldPoint(new Vector3( pos.x, pos.y, 10f));
+            _EndPos.z = 0f;
+
+            //마우스가 움직였을때 처리하는 함수
+            MouseMove();
+        }
     }
 }
