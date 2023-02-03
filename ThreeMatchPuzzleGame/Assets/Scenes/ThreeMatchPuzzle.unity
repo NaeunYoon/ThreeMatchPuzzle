@@ -521,6 +521,20 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   _BlockPrefab: {fileID: 876222586334920889, guid: 2094674cbb3080d47bc80f212947f3ea, type: 3}
+  _Sprites:
+  - {fileID: 21300000, guid: c42ec58c952b4d2489271bd6beb0f430, type: 3}
+  - {fileID: 21300000, guid: 5506c5b1f2da66c4ab19134c53d938b8, type: 3}
+  - {fileID: 21300000, guid: 41af2fc74148a454d8ce759159e54075, type: 3}
+  - {fileID: 21300000, guid: a8588118eeef53343b87cf9a3ae9410b, type: 3}
+  - {fileID: 21300000, guid: 7359b50b3b9abac4e977e5bb6b87695c, type: 3}
+  - {fileID: 21300000, guid: 4f68faa16b761e840b6be5f3c7a7c0af, type: 3}
+  - {fileID: 21300000, guid: ce4ad2ed6625cd34d921e2043707b037, type: 3}
+  - {fileID: 21300000, guid: f6ea30fca99fd23449e32dc5e3b2cdaf, type: 3}
+  - {fileID: 21300000, guid: 12149ed928b6b9a4ebc17505803cef59, type: 3}
+  - {fileID: 21300000, guid: 48eaa47a7ec244545bd5df6674beb001, type: 3}
+  - {fileID: 21300000, guid: 87d2808a84d248e4ca21aaa63a0e05fa, type: 3}
+  - {fileID: 21300000, guid: b4287d0ff225fa246b592d90f49b15e7, type: 3}
+  - {fileID: 21300000, guid: 417b5241e5da1124faa5834833426e38, type: 3}
   Parent: {fileID: 927287272}
 --- !u!4 &646509435
 Transform:

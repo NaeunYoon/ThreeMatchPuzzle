@@ -1,8 +1,11 @@
 using System.Collections;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 //using System.Numerics;
 using Unity.Mathematics;
+using UnityEditor;
 using UnityEngine;
+using System.Linq;
 
 
 /// <summary>
@@ -20,10 +23,15 @@ public class BoardManager : MonoBehaviour
 {
     [SerializeField] private GameObject _BlockPrefab;
 
+    //스프라이트 이미지 배열을 만든다 (여러가지 이미지를 넣기 위해서) : 13개 이미지를 인스펙터창 배열에 넣는다.
+    //이미지가 고정되어 있는 경우에는 인스펙터창에 직접 넣고 가변적이면 불러들이는 것이 나을 수 있다.
+    [SerializeField] private Sprite[] _Sprites; 
+
+
     private Vector3 _screenPos; //스크인 0,0점의 월드 좌표값 저장
     float _ScreenWidth; //스크린 넓이
     float _BlockWidth;  //블럭 하나의 넓이를 조정하기 위한 변수
-    float _ScreenHeight;    //스크린 높이
+    //float _ScreenHeight;    //스크린 높이
     //여백처리 (2개 필요함(x,y)
     private float _Xmargin = 0.5f; //x축 여백
     private float _Ymargin = 2f; //y축 여백
@@ -53,7 +61,7 @@ public class BoardManager : MonoBehaviour
 
 
 
-        MakeBoard(10,10);
+        MakeBoard(5,5);
     }
     /// <summary>
     /// 블럭배치 instantiate -> transform.position ->
@@ -68,7 +76,7 @@ public class BoardManager : MonoBehaviour
 
     void MakeBoard(int column, int row)
     {
-        float width = _ScreenWidth -(_Xmargin * 2); //출력되는 너비 ( 5.6이됨. 스크린 x 는 2.8이고 전체 스크린 너비를 구한 것)
+        float width = _ScreenWidth - (_Xmargin * 2); //출력되는 너비 ( 5.6이됨. 스크린 x 는 2.8이고 전체 스크린 너비를 구한 것)
         //=> x 마진이 양쪽에 있기 때문에 곱하기 2 해준다 (y는 하나만 적용해주면 됨)
 
         //블럭의 너비 하나는 일정하나 전체 너비는 row 의 갯수에 따라 달라진다
@@ -130,8 +138,19 @@ public class BoardManager : MonoBehaviour
 
                 //블럭에 이름을 전달 (어느게 찍혔는지 확인)
                 _GameBoard[co, ro].name = $"Block[{co},{ro}]";
-                
-                
+
+                //블럭의 컬럼과 로우에 값을 대입한다 ( 맨 처음 만들어졌을 때 값을 부여함)
+                //=> 클릭한 오브젝트를 알고 있지만 그 옆에 뭐가 있는지 알아야 하기 때문에.
+                //현재 컬럼과 로우값을 알면 옆에 뭐가 있는지 알 수 있음
+                _GameBoard[co,ro].GetComponent<Block>().Column = co;
+                _GameBoard[co,ro].GetComponent<Block>().Row = ro;
+
+                //랜덤한 값을 가져오려면 유니티 엔진의 랜덤 함수를 사용한다 => 다양한 이미지 넣기
+                int type = UnityEngine.Random.Range(0,5 /*_Sprites.Length*/); //0부터 12 사이의 번호를 가져와서 리턴해준다
+                _GameBoard[co,ro].GetComponent<Block>().Type = type;    //타입을 지정해준다
+                _GameBoard[co,ro].GetComponent<Block>().BlockImage.sprite = _Sprites[type]; //스프라이트에다가 타입번호를 넣어준다
+                //블럭 이미지를 교체한다.
+
             }
         }
     }
@@ -184,19 +203,144 @@ public class BoardManager : MonoBehaviour
     /// </summary>
     void MouseMove()
     {
-        Debug.Log("MouseMove");
+        //Debug.Log("MouseMove");
+
         //감도체크
         //두 벡터사이의 거리를 구한다
         float diff = Vector2.Distance(_StartPos, _EndPos);
         //조건 
         //움직인 거리가 내가 설정한 MoveDistance 보다 클 때 처리, MoveDistance : 감도 0.01f
         // 클릭된 오브젝트가 있을 때
-        if(diff > _MoveDistance && _ClickObject != null) 
+        //Debug.Log("Diff " +diff);
+        //Debug.Log("감도 " + _MoveDistance);
+
+        //두 벡터의 거리가 감도보다 크고 + 클릭한 오브젝트가 널이 아니고 + 입력 가능할 때
+        if(diff > _MoveDistance && _ClickObject != null && _InputOK == true) 
         {
             //어느쪽 방향으로 움직임이 일어났는지 계산
             // 마우스 방향 enum, 마우스 이동 시 방향을 계산하는 함수, 방향 계산 뒤에 그 사이의 각도를 구하는 함수
             MouseMoveDirection dir = CalculateDirection();
-            Debug.Log("Direction "+dir);
+            Debug.Log("Direction "+ dir);
+            //들어오는 순간 입력처리가 안되게 변경
+            _InputOK = false;
+
+            switch(dir) 
+            {
+                case MouseMoveDirection.MOUSEMOVELEFT:
+                    {
+                        //현재 클릭된 블럭의 행과 열 값을 블럭 오브젝트에서 가지고 온다
+                        int column = _ClickObject.GetComponent<Block>().Column;
+                        int row = _ClickObject.GetComponent<Block>().Row;
+                        //블럭이 바뀔 때 영역 안에서만 바뀌어야 한다
+
+                        //열값이 0보다 커야 다른거랑 바꿀 수 있음
+                        if(row > 0)
+                        {
+                            //서로 바꿀 블럭의 행값을 변경
+
+                            //클릭된 오브젝트가 왼쪽으로 움직이면 row 값이 하나 줄어드는 것
+                            _GameBoard[column, row].GetComponent<Block>().Row = row - 1;
+                            //클릭한 블럭의 왼쪽에 있는 애는 오른쪽으로 움직여야 함
+                            _GameBoard[column,row-1].GetComponent<Block>().Row = row;
+
+                            //게임보드상의 블럭의 참조값을 바꾼다
+                            //=> 
+                            _GameBoard[column,row] = _GameBoard[column,row-1];
+                            _GameBoard[column, row-1] = _ClickObject;
+
+                            //블럭을 좌우측으로 움직인다
+                            _GameBoard[column, row].GetComponent<Block>().Move(DIRECTION.RIGHT);
+                            _GameBoard[column, row - 1].GetComponent<Block>().Move(DIRECTION.LEFT);
+                        }
+                    }
+                break;
+                case MouseMoveDirection.MOUSEMOVERIGHT:
+                    {
+                        //현재 클릭된 블럭의 행과 열 값을 블럭 오브젝트에서 가지고 온다
+                        int column = _ClickObject.GetComponent<Block>().Column;
+                        int row = _ClickObject.GetComponent<Block>().Row;
+                        //블럭이 바뀔 때 영역 안에서만 바뀌어야 한다
+
+                        //열값이 열값보다 작아야 하기 때문에 제한을 걸음
+                        if (row < (_Row-1))
+                        {
+                            //서로 바꿀 블럭의 행값을 변경
+
+                            //클릭된 오브젝트가 왼쪽으로 움직이면 row 값이 하나 줄어드는 것
+                            _GameBoard[column, row].GetComponent<Block>().Row = row + 1;
+                            //클릭한 블럭의 왼쪽에 있는 애는 오른쪽으로 움직여야 함
+                            _GameBoard[column, row + 1].GetComponent<Block>().Row = row;
+
+                            //게임보드상의 블럭의 참조값을 바꾼다
+                            //=> 
+                            _GameBoard[column, row] = _GameBoard[column, row +1];
+                            _GameBoard[column, row +1] = _ClickObject;
+
+                            //블럭을 좌우측으로 움직인다
+                            _GameBoard[column, row].GetComponent<Block>().Move(DIRECTION.LEFT);
+                            _GameBoard[column, row + 1].GetComponent<Block>().Move(DIRECTION.RIGHT);
+                        }
+                    }
+                    break;
+                case MouseMoveDirection.MOUSEMOVEUP:
+                    {
+                        //현재 클릭된 블럭의 행과 열 값을 블럭 오브젝트에서 가지고 온다
+                        int column = _ClickObject.GetComponent<Block>().Column;
+                        int row = _ClickObject.GetComponent<Block>().Row;
+                        //블럭이 바뀔 때 영역 안에서만 바뀌어야 한다
+
+                        //열값이 0보다 커야 다른거랑 바꿀 수 있음
+                        if ( column > 0)
+                        {
+                            //서로 바꿀 블럭의 열값을 변경
+
+                            //클릭된 오브젝트가 위로 움직이면 col 값이 하나 줄어드는 것
+                            _GameBoard[column, row].GetComponent<Block>().Column = column - 1;
+                            //클릭한 블럭의 아래쪽에 있는 애는 위로 움직여야 함
+                            _GameBoard[column - 1, row].GetComponent<Block>().Column = column;
+
+                            //게임보드상의 블럭의 참조값을 바꾼다
+                            //=> 
+                            _GameBoard[column, row] = _GameBoard[column - 1, row];
+                            _GameBoard[column - 1, row] = _ClickObject;
+
+                            //블럭을 상하측로 움직인다
+                            _GameBoard[column - 1, row].GetComponent<Block>().Move(DIRECTION.UP);
+                            _GameBoard[column, row].GetComponent<Block>().Move(DIRECTION.DOWN);
+                        }
+                    }
+                    break;
+                case MouseMoveDirection.MOUSEMOVEDOWN:
+                    {
+                        //현재 클릭된 블럭의 행과 열 값을 블럭 오브젝트에서 가지고 온다
+                        int column = _ClickObject.GetComponent<Block>().Column;
+                        int row = _ClickObject.GetComponent<Block>().Row;
+                        //블럭이 바뀔 때 영역 안에서만 바뀌어야 한다
+
+                        //열값이 전체 열보다 작아야 다른거랑 바꿀 수 있음
+                        if (column < _Column-1)
+                        {
+                            //서로 바꿀 블럭의 열값을 변경
+
+                            //클릭된 오브젝트가 아래으로 움직이면 열 값이 하나 늘어나는 것
+                            _GameBoard[column, row].GetComponent<Block>().Column = column + 1;
+                            //클릭한 블럭의 위에 있는 애는 아래로 움직여야 함
+                            _GameBoard[column+1, row].GetComponent<Block>().Column = column;
+
+                            //게임보드상의 블럭의 참조값을 바꾼다
+                            //=> 
+                            _GameBoard[column, row] = _GameBoard[column + 1, row];
+                            _GameBoard[column + 1, row] = _ClickObject;
+
+                            //블럭을 상하측으로 움직인다
+                            _GameBoard[column + 1, row].GetComponent<Block>().Move(DIRECTION.DOWN);
+                            _GameBoard[column, row].GetComponent<Block>().Move(DIRECTION.UP);
+                        }
+                    }
+                    break;
+
+            }
+
         }
     }
     /// <summary>
@@ -210,20 +354,20 @@ public class BoardManager : MonoBehaviour
         /*
          up벡터를 0으로 뒀을 떄, 시계방향으로 0 45 90 135 180 225 270 315 360 
          */
-        if (angle > 315.0f && angle <= 360 || angle >= 0 && angle < 45.0f)
+        if (angle >= 315.0f && angle <= 360 || angle >= 0 && angle < 45.0f)
         {
             return MouseMoveDirection.MOUSEMOVEUP;
         }
-        else if(angle >= 45f && angle<135f)
+        else if(angle >= 45f && angle< 135f)
         {
             //화면 반대편에서 보기 때문에 left로 바뀐다
             return MouseMoveDirection.MOUSEMOVELEFT;
         }
-        else if(angle >= 135f && angle <225f)
+        else if(angle >= 135f && angle < 225f)
         {
             return MouseMoveDirection.MOUSEMOVEDOWN;
         }
-        else if(angle>=225f && angle<315f)
+        else if(angle >= 225f && angle < 315f)
         {
             //화면 반대편에서 보기 때문에 left로 바뀐다
             return MouseMoveDirection.MOUSEMOVERIGHT;
@@ -237,16 +381,195 @@ public class BoardManager : MonoBehaviour
     /// <summary>
     /// 두 벡터 사이의 각도를 구하는 함수
     /// </summary>
-    /// <param name="from"></param>
-    /// <param name="to"></param>
+    /// <param name="from"> => 클릭한 곳 </param>
+    /// <param name="to">=> 클릭하고 뗸 곳</param>
     /// <returns></returns>
     private float CalculateAngle(Vector3 from, Vector3 to)
     {
         //블럭의 네 부분 각도를 구해 그 바운더리에 들어온 위치를 통해 방향을 정한다
         //to 에서 from 좌표값을 뺴면 from 에서 to로 향하는 좌표값을 만들 수 있다
         //up벡터와 to 벡터 사이의 각도를 구하는 함수가 FromToRotation이다.
-        //우리가 쳐다보는 좌표가 z 이기 때문에, 회전 각도 중에서도 z 값만 취한다 => 
+        //우리가 쳐다보는 좌표가 z 이기 때문에, 회전 각도 중에서도 z 값만 취한다 => z축을 기준으로 한 세타값
+        ////우리는 뒷면을 기준으로 쳐다보고 잇음 (뒤집어짐)
         return Quaternion.FromToRotation(Vector3.up, to - from).eulerAngles.z;
+    }
+    //입력이 계속 먹는 것을 방지한다.
+    private bool _InputOK;  
+    /// <summary>
+    /// 블럭의 움직임이 끝났는지 체크하는 함수
+    /// 움직이는 블럭이 있는지 확인한다
+    /// </summary>
+    /// <returns></returns>
+    /// 
+    private bool CheckBlockMove()
+    {
+        foreach (var item in _GameBoard)
+        {
+            if(item !=null)
+            {
+                if(item.GetComponent<Block>().State == BLOCKSTATE.MOVE)
+                {
+                    return false;
+                }
+            }
+        }
+        return true;
+    }
+    //삭제될 블럭 저장
+    private List<GameObject> _RemovingBlocks = new List<GameObject>();
+    //삭제된 블럭 저장
+    private List<GameObject> _RemovedBlocks = new List<GameObject>();
+    /// <summary>
+    /// 3매칭된 블럭을 찾는 함수
+    /// 3매치되면 블럭이 사라지고 위의 떨어지면 빈 자리가 생긴다.
+    /// 그 빈 자리에 새로운 블럭을 채워 넣을 때 화면에 안보이게만 하고 재사용을 한다.
+    /// 열방향일 수 있고 행 방향일 수 있다. 맨 처음 타입을 체크하고 그 옆의 블럭을 기록하고 그 옆의 블럭을 체크하는 형식
+    /// </summary>
+    private void CheckMatchBlock()
+    {
+        //3개 이상 맞은 블럭이 있는지 체크한다
+        //매치된 블럭을 저장 할 리스트 
+        List<GameObject> matchList = new List<GameObject>();
+        // 임시로 매칭된 블럭을 저장
+        List<GameObject> tempMatchList = new List<GameObject>();
+        //현재 매치 비교할 타입을 저장할 변수 (비교할 블럭 타입을 기록)
+        int checkType = 0;
+        //삭제될 블럭 저장용 리스트 초기회
+        _RemovedBlocks.Clear();
+        //가로방향으로 같은 블럭이 있는지 체크
+        for (int row = 0; row < _Row; row++)
+        {
+            if (_GameBoard[row,0])
+            {
+                continue;
+            }
+            //첫 행의 블럭의 타입값을 가져온다
+            checkType = _GameBoard[row, 0].GetComponent<Block>().Type;
+            //처음 블럭을 임시 매치블럭 저장공간에 추가한다
+            tempMatchList.Add(_GameBoard[row, 0]);
+
+            for (int col = 0; col < _Column; col++)
+            {
+                //블럭이 없으면 컨티뉴
+                if (_GameBoard[row,col]==null)
+                {
+                    continue;
+                }
+
+                if(checkType == _GameBoard[row,col].GetComponent<Block>().Type) 
+                {
+                    tempMatchList.Add(_GameBoard[row, col]);
+                }
+                else
+                {
+                    //매치되는 블럭이 3개 이상이면?
+                    if(tempMatchList.Count>=3)
+                    {
+                        //매칭된 블럭 리스트에 임시 매치 리스트에 있는걸 옮긴다
+                        matchList.AddRange(tempMatchList);
+                        //블럭을 옮기는 것이 아니라 블럭의 참조값을 없앤다 (다시 체크해야 하기 때문)
+                        tempMatchList.Clear();
+                        //불일치가 난 위치의 블럭 타입 값을 다시 셋팅
+                        checkType = _GameBoard[row,col].GetComponent<Block>().Type;
+                        tempMatchList.Add(_GameBoard[row, col]);
+                    }
+                    else
+                    {
+                        //불일치가 난 위치에서 이전의 블럭이 3개가 일치하지 않았음=>다시 초기화
+                        tempMatchList.Clear();
+                        //값을 다시 셋팅한다
+                        checkType = _GameBoard[row, col].GetComponent<Block>().Type;
+                        tempMatchList.Add(_GameBoard[row, col]);
+                    }
+                }
+            }
+            //행이 다 돌았음
+            //열에 따른 행을 다 돈 후 다시 한번 체크한다
+            //템프리스트의 값의 count를 체크한다
+            if(tempMatchList.Count>=3)
+            {
+                matchList.AddRange(tempMatchList);
+                tempMatchList.Clear();
+            }
+            else
+            {
+                //세개가 매치되지 않음 
+                tempMatchList.Clear();
+            }
+        }
+
+        //=================================================
+        //세로 방향으로 매치 블럭을 체크한다
+        for (int col = 0; col < _Column; col++)
+        {
+            if (_GameBoard[col,0]==null)
+            {
+                continue;
+            }
+            //첫 열의 블럭 타입값을 저장한다
+            checkType = _GameBoard[col,0].GetComponent<Block>().Type;
+            tempMatchList.Add(_GameBoard[col, 0]);
+
+            for (int row = 0; row < _Row; row++)
+            {
+                if (_GameBoard[col, row] == null)
+                {
+                    continue;
+                }
+
+                if(checkType == _GameBoard[col,row].GetComponent<Block>().Type)
+                {
+                    tempMatchList.Add(_GameBoard[col, row]);
+                }
+                else
+                {
+                    //불일치 ( 해당 위치의 블럭의 타입이 틀림
+                    if(tempMatchList.Count>= 3) 
+                    { 
+                        //템프에 있는걸 매치에 옮기고
+                        matchList.AddRange(tempMatchList);
+                        //클리어
+                        tempMatchList.Clear();
+                         //불일치가 나타난 위치에서 다시 블럭의 타입을 가져온다 ( 그 위치에서부터)
+                        checkType = _GameBoard[col, row].GetComponent<Block>().Type;
+                        //불일치가 나타난 블럭의 위치를 다시 등록한다
+                        tempMatchList.Add(_GameBoard[col, row]);
+                    }
+                    else
+                    {
+                        //블럭의 매칭 갯수가 3보다 작은 경우
+                        tempMatchList.Clear();
+                        //이 위치에서 다시 체크타입 가져온다 ( 다시 3개가 일치하는지 따져본다)
+                        checkType = _GameBoard[col, row].GetComponent<Block>().Type;
+                        //블럭을 추가한다
+                        tempMatchList.Add(_GameBoard[col,row]);
+                    }
+                }
+            }
+            //열을 다 돈 후 3개 이상의 매칭된경우
+
+            if(tempMatchList.Count>=3)
+            {
+                matchList.AddRange(tempMatchList);
+                tempMatchList.Clear();
+            }
+            else
+            {
+                tempMatchList.Clear();
+            }
+        }
+        //매치리스느의 중복된 블럭을 추려낸다
+        //중복된걸 빼고 돌려준다
+
+        matchList = matchList.Distinct().ToList();
+
+        if(matchList.Count>=0) 
+        {
+            foreach (var item in matchList)
+            {
+                item.SetActive(false);
+            }
+        }
     }
 
     void Update()
@@ -255,11 +578,12 @@ public class BoardManager : MonoBehaviour
          게임 : 게임 메인루프가 돌아가고 -> 입력 확인을 하고 -> 입력에 따른 프로세싱 처리하고 -> 화면에 랜더링 한다
          */
 
-        //마우스 버튼이 눌렸을 때 
-        if(Input.GetMouseButtonDown(0))
+        //마우스 버튼이 눌렸을 때 + 입력이 가능한 상태일 떄
+        if(Input.GetMouseButtonDown(0) && _InputOK == true)
         {
             //마우스 클릭한 상태로 변경
             _MouseClick = true;
+            _IsOver = false;
 
             //Bounds 오류나는 경우 이걸로 쓰기 
             Vector3 pos = Input.mousePosition;
@@ -268,8 +592,7 @@ public class BoardManager : MonoBehaviour
             //StartPos와 EndPos 를 마우스가 처음 클릭한 좌표로 저장
              _EndPos =_StartPos = Camera.main.ScreenToWorldPoint(new Vector3(pos.x, pos.y, 10f));   //클릭이 되었을 때 위치를 시작점과 끝점 위치값으로 초기화
             //z값을 쓰지 않으니 0으로 초기화
-            _EndPos.z = _StartPos.x = 0f;
-
+            _EndPos.z = _StartPos.z = 0f;
 
             //2D에서는 마우스로 하는게 더 편함 (3D는 광선을 발사해서 사용-> 무거움)
 
@@ -284,8 +607,6 @@ public class BoardManager : MonoBehaviour
 
             //클릭이 되었는지 안 되었는지 체크하는 변수
 
-
-             _IsOver = false;
             for (int i = 0; i < _Column; i++)
             {
                 for (int j   = 0; j < _Row; j++)
@@ -293,22 +614,18 @@ public class BoardManager : MonoBehaviour
                     //클릭한 좌표값과 겹쳐지는 블럭을 찾는 것
                     //먼저 블럭이 있는지를 체크한다 (없는 경우도 있음)
 
-
-                    if (_GameBoard[i,j]!= null)
+                    if (_GameBoard[i,j] != null)
                     {
                         //클릭이 되었는지 안 되었는지 체크하는 변수
                         //각각의 블럭들은 블럭 컴포넌트의 부모컴포넌트에 있는 블럭에 접근하고 그건 또 자식들의 spriterenderer에 접근해서
                         //사각형의 bounds 를 가져온다. bound안에 a마우스 클릭한 월드 좌표의 위치가 포함되는지 여부를 bool값으로 전달한다
-
-                        _IsOver = _GameBoard[i,j].GetComponent<Block>().BlockImage.GetComponent<SpriteRenderer>().bounds.Contains(pos);
-                        //isOver = true;
+                        //포함되어있으면 true 가 리턴되어서 아래로 이동한다
+                        _IsOver = _GameBoard[i,j].GetComponent<Block>().BlockImage.GetComponent<SpriteRenderer>().bounds.Contains(_StartPos);
+                        
 
                         //만약에 오브젝트의 사이즈로 하려면 콜라이더를 넣어준다.
-
-
                     }
-
-                    if(_IsOver==true)
+                    if(_IsOver == true)
                     {
                         //찍힌 블럭의 이름이 출력된다.
                         Debug.Log("ClickObj = "+_GameBoard[i,j].name);
@@ -319,34 +636,36 @@ public class BoardManager : MonoBehaviour
                         //중첩되어있는 for문을 한번에 빠져나가기 (그렇지 않으면 break 를 두 번 써줘야 함)
                         goto LoopExit;
                     }
-
                 }
             }
-        LoopExit:;
-
+            LoopExit:;
         }
-        //마우스 버튼을 놨을 때
-        if(Input.GetMouseButtonUp(0))
+        //마우스 버튼을 놨을 때 => 입력이 가능한 상태로 변경
+        if (Input.GetMouseButtonUp(0))
         {
-            _ClickObject= null;
-            _MouseClick= false;
-
+            _ClickObject = null;
+            _MouseClick = false;
+            _InputOK= true;
         }
         //마우스가 클릭된 상태에서 마우스가 어떤 방향이든 변화가 있는지
         //1. 마우스 클릭을 TRUE 로 처리 (클릭된 상태에서 드래그를 했는지 안했는지 처리)
         //2. X축으로 이동했는지 (변화량이 있는지 => 어느쪽이든 상관 없음. 0이면 변화량이 없음)
-        if(_MouseClick == true&&(Input.GetAxis("Mouse X")<0) || (Input.GetAxis("Mouse X")>0)
-            || (Input.GetAxis("Mouse Y"))<0 || (Input.GetAxis("Mouse Y") > 0))
+        if (_MouseClick == true && (Input.GetAxis("Mouse X") < 0) || (Input.GetAxis("Mouse X") > 0)
+            || (Input.GetAxis("Mouse Y") < 0) || (Input.GetAxis("Mouse Y") > 0))
         {
             //변화가 있는 마우스 커서의 위치를 가져와서 을 ENDPOS에 저장
             //클릭된 상태에서 마우스가 움직인 것. 그 움직인 위치값을 endPos가 된다
             //클릭점은 startPos가 되고 내가조금이라도 움직이면 그걸 endpos로 정한다
             Vector3 pos = Input.mousePosition;
-            _EndPos = Camera.main.ScreenToWorldPoint(new Vector3( pos.x, pos.y, 10f));
+            _EndPos = Camera.main.ScreenToWorldPoint(new Vector3( pos.x, pos.y, 10.0f));
             _EndPos.z = 0f;
 
             //마우스가 움직였을때 처리하는 함수
             MouseMove();
+            CheckMatchBlock();
         }
+
+       
+        
     }
 }

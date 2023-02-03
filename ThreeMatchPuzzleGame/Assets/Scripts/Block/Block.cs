@@ -23,8 +23,6 @@ public class Block : MonoBehaviour
     [SerializeField] private SpriteRenderer _BlockImage;
     //외부에서 사용해야하기 때문에 블럭 이미지를 프로퍼티로 만들어준다
     //블럭의 사이즈를 spriteRenderer로 가져온다
-
-    
     public SpriteRenderer BlockImage
     {
         get
@@ -33,14 +31,21 @@ public class Block : MonoBehaviour
         }
     }
 
+    //블럭을 이동시키려면 컬럼값과 로우값을 저장해야함
+    public int Column { set; get;}  //현재 블럭의 컬럼
+    public int Row { set; get;} //현재 블럭의 로우
+
     //블럭이 움직이는지 멈춰있는지 상태를 저장하는 프로퍼티를 만든다
     public BLOCKSTATE State { set;get; } = BLOCKSTATE.STOP;
+
+    //스프라이트 이미지의 타입을 지정해준다 => 다양한 이미지를 플레이 시에 활용하기 위해서 타입 프로퍼티를 만들고 이미지를 배정한다
+    public int Type { set; get; }
+
 
     void Start()
     {
         
     }
-
 
     public float Width  //블럭 너비 저장하는 프로퍼티
     {
@@ -159,11 +164,7 @@ public class Block : MonoBehaviour
                         }
                     }
                 break;
-
-        }
-
-
-
+            }
         }
     }
 }
