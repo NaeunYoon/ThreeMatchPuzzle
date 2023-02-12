@@ -428,7 +428,7 @@ public class BoardManager : MonoBehaviour
     private void CheckMatchBlock()
     {
         //3개 이상 맞은 블럭이 있는지 체크한다
-        //매치된 블럭을 저장 할 리스트 
+        //매칭된 블럭을 저장 할 리스트 
         List<GameObject> matchList = new List<GameObject>();
         // 임시로 매칭된 블럭을 저장
         List<GameObject> tempMatchList = new List<GameObject>();
@@ -439,7 +439,7 @@ public class BoardManager : MonoBehaviour
         //가로방향으로 같은 블럭이 있는지 체크
         for (int row = 0; row < _Row; row++)
         {
-            if (_GameBoard[row,0])
+            if (_GameBoard[row,0]==null)
             {
                 continue;
             }
@@ -448,7 +448,7 @@ public class BoardManager : MonoBehaviour
             //처음 블럭을 임시 매치블럭 저장공간에 추가한다
             tempMatchList.Add(_GameBoard[row, 0]);
 
-            for (int col = 0; col < _Column; col++)
+            for (int col = 1; col < _Column; col++)
             {
                 //블럭이 없으면 컨티뉴
                 if (_GameBoard[row,col]==null)
@@ -497,7 +497,7 @@ public class BoardManager : MonoBehaviour
                 tempMatchList.Clear();
             }
         }
-
+        tempMatchList.Clear();
         //=================================================
         //세로 방향으로 매치 블럭을 체크한다
         for (int col = 0; col < _Column; col++)
@@ -507,19 +507,19 @@ public class BoardManager : MonoBehaviour
                 continue;
             }
             //첫 열의 블럭 타입값을 저장한다
-            checkType = _GameBoard[col,0].GetComponent<Block>().Type;
-            tempMatchList.Add(_GameBoard[col, 0]);
+            checkType = _GameBoard[0,col].GetComponent<Block>().Type;
+            tempMatchList.Add(_GameBoard[0,col]);
 
             for (int row = 0; row < _Row; row++)
             {
-                if (_GameBoard[col, row] == null)
+                if (_GameBoard[row,col] == null)
                 {
                     continue;
                 }
 
-                if(checkType == _GameBoard[col,row].GetComponent<Block>().Type)
+                if(checkType == _GameBoard[row,col].GetComponent<Block>().Type)
                 {
-                    tempMatchList.Add(_GameBoard[col, row]);
+                    tempMatchList.Add(_GameBoard[row, col]);
                 }
                 else
                 {
@@ -531,18 +531,18 @@ public class BoardManager : MonoBehaviour
                         //클리어
                         tempMatchList.Clear();
                          //불일치가 나타난 위치에서 다시 블럭의 타입을 가져온다 ( 그 위치에서부터)
-                        checkType = _GameBoard[col, row].GetComponent<Block>().Type;
+                        checkType = _GameBoard[row, col].GetComponent<Block>().Type;
                         //불일치가 나타난 블럭의 위치를 다시 등록한다
-                        tempMatchList.Add(_GameBoard[col, row]);
+                        tempMatchList.Add(_GameBoard[row, col]);
                     }
                     else
                     {
                         //블럭의 매칭 갯수가 3보다 작은 경우
                         tempMatchList.Clear();
                         //이 위치에서 다시 체크타입 가져온다 ( 다시 3개가 일치하는지 따져본다)
-                        checkType = _GameBoard[col, row].GetComponent<Block>().Type;
+                        checkType = _GameBoard[row, col].GetComponent<Block>().Type;
                         //블럭을 추가한다
-                        tempMatchList.Add(_GameBoard[col,row]);
+                        tempMatchList.Add(_GameBoard[row, col]);
                     }
                 }
             }
@@ -558,7 +558,7 @@ public class BoardManager : MonoBehaviour
                 tempMatchList.Clear();
             }
         }
-        //매치리스느의 중복된 블럭을 추려낸다
+        //매치리스트의 중복된 블럭을 추려낸다
         //중복된걸 빼고 돌려준다
 
         matchList = matchList.Distinct().ToList();
@@ -567,9 +567,81 @@ public class BoardManager : MonoBehaviour
         {
             foreach (var item in matchList)
             {
+                //게임오브젝트가 들어옴 (item)
+                //매치된 블럭을 비활성화 했음.
+                //파괴하고 다시 만드는것은 비용이 많이 들기 때문에 되도록이면 비활성화 해야 한다
+                //매치된 블럭을 보드상에서 삭제해야하기 때문에 실제 보드상에서 없애버린다
+                //null을 넣어서 없애버림.
+                //세 개가 매치가 되면 블럭 자체는 없어지지 않지만 그 부분을 널 처리를 한다 ( 보드상에서)
+                //게임보드 상에서 해당 위치릐 블럭을 널처리 
+                _GameBoard[item.GetComponent<Block>().Column, item.GetComponent<Block>().Row]=null;
+                //블럭을 안보이게 처리
                 item.SetActive(false);
             }
+
+            //매치리스트에 있는 블럭을 removing 블럭 (삭제될 예정인 블럭들)에 넣는다
+            _RemovingBlocks.AddRange(matchList);
         }
+        //삭제될 예정인 블럭을 삭제 블럭 리스트에 저장한다
+        _RemovedBlocks.AddRange(_RemovingBlocks);
+        //중복이 안되게 처리 ( 중복된 블럭을 처리하는 함수)
+        _RemovedBlocks = _RemovedBlocks.Distinct().ToList();
+
+        //중복된 블럭 체크가 끝나면 빈칸을 채우기 위해 블럭을 하강시킨다
+        DownMoveBlocks();
+    }
+
+    private void DownMoveBlocks()
+    {
+        //움직여야 할 갯수를 카운팅하는 정수 
+        //몇 칸을 하강해야 하는지
+        int moveCount = 0;
+
+        //세로방향으로 돌아야 하니까 바깥이 row 안쪽을 col 로 한다
+        for (int row =0; row<_Row; row++)
+        {
+            for (int col = _Column-1; col >= 0; col--)
+            {
+                //밑에방향에서부터 움직여야 함
+                //아래부터 4-3-2-1-0 이렇게 돌아야 한다
+                //게임보드상에 블럭이 없는 경우에 널 처리를 했었음
+                if (_GameBoard[row,col]==null)
+                {
+                    moveCount++;
+                }
+                else
+                {
+                    //게임보드상에 블럭이 있는 경우
+                    if(moveCount>0)
+                    {
+                        //하강유무를 체크한다
+                        Block block = _GameBoard[row,col].GetComponent<Block>();
+                        //현재 위치값을 기록
+                        block.MovePos = block.transform.position;
+                        //x값은 그냥 놔두면 됨, 
+                        //y 값은 moveCount * 블럭의 길이만큼 이동할 거리를 구해준다
+                        //이동할 위치값을 기록한다 ( 얼마만큼 이동할건지)
+                        block.MovePos = new Vector3(block.MovePos.x, block.MovePos.y - block.Width * moveCount, block.MovePos.z);
+                        //이전에 있던 게임보드상의 위치를 초기화
+                        _GameBoard[row, col] = null;
+                        //이동할 곳의 컬럼값과 로우값을 계산해서 넣어준다
+                        //기존의 위치에서 moveCount 만큼 떨어지기 때문에 더해진다
+                        //게임보드상의 이동할 위치로 변경한다
+                        block.Column = block.Column + moveCount;
+                        //블럭의 이름을 변경한다
+                        block.gameObject.name = $"Block[{block.Row},{block.Column}]";
+                        //게임보드상의 이동할 위치에 블럭의 참조값을 저장
+                        _GameBoard[block.Column, block.Row] = block.gameObject;
+
+                        //밑의 방향으로 처리하는 함수 (블럭에서 가져옴)
+                        block.Move(DIRECTION.DOWN, moveCount);
+                    }
+                }
+            }
+            //한 열이 끝났기 때문에 초기화해준다
+            moveCount= 0;
+        }
+
     }
 
     void Update()

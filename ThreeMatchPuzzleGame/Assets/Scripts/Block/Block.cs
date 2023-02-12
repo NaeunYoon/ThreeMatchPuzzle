@@ -64,6 +64,7 @@ public class Block : MonoBehaviour
     /// 블럭 움직이게 하는 함수 (열거형 사용)
     /// 블럭에 장착되는 스크립트이기 떄문에 방향값을 인자로 전달한다
     /// 블럭은 블럭의 width만큼 움직인다
+    /// 한 칸만 이동한다 ( 블럭을 상 하 좌 우로 한 칸 이동하는 함수
     /// </summary>
     public void Move(DIRECTION direct)
     {
@@ -108,6 +109,45 @@ public class Block : MonoBehaviour
                 }
                 break;
         }
+    }
+    /// <summary>
+    /// 어차피 이동할 위치를 기록하기 때문에 int 는 필요 없지만 위의 함수와 구별하기 위해 넣음
+    /// 이동할 거리는 보드매니저에서 넣었음
+    /// </summary>
+    /// <param name="direct"></param>
+    /// <param name="moveCount"></param>
+    public void Move(DIRECTION direct, int moveCount)
+    {
+        switch(direct)
+        {
+            case DIRECTION.LEFT:
+                {
+                    direct = DIRECTION.LEFT;
+                    State = BLOCKSTATE.MOVE;
+                }
+            break;
+
+            case DIRECTION.RIGHT:
+                {
+                    direct = DIRECTION.RIGHT;
+                    State = BLOCKSTATE.MOVE;
+                }
+            break;
+
+            case DIRECTION.UP:
+                {
+                    direct = DIRECTION.UP;
+                    State = BLOCKSTATE.MOVE;
+                }
+            break;
+
+            case DIRECTION.DOWN:
+                {
+                    direct = DIRECTION.DOWN;
+                    State = BLOCKSTATE.MOVE;
+                }
+            break;
+        }    
     }
 
     void Update()
